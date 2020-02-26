@@ -173,6 +173,8 @@ void *worker(void *arg)
 	double pps_voltage;
 	double pps_current;
 	double vm_current;
+	double laser_voltage;
+	double laser_current;
 
 	double voltage;
 
@@ -202,16 +204,18 @@ void *worker(void *arg)
 	// === init pps
 	gpib_write(pps_fd, "output 0");
 	gpib_write(pps_fd, "instrument:nselect 1");
-	gpib_write(pps_fd, "voltage:protection:clear");
-	gpib_write(pps_fd, "voltage:protection:state on");
-	gpib_write(pps_fd, "voltage:protection:level 5.5V");
+	// gpib_write(pps_fd, "voltage:protection:clear");
+	// gpib_write(pps_fd, "voltage:protection:state on");
+	// gpib_write(pps_fd, "voltage:protection:level 5.5V");
+	gpib_write(pps_fd, "voltage:limit 5.5V");
 	gpib_write(pps_fd, "voltage 5.0");
 	gpib_write(pps_fd, "current 0.5");
 	gpib_write(pps_fd, "channel:output 1");
 	gpib_write(pps_fd, "instrument:nselect 2");
-	gpib_write(pps_fd, "voltage:protection:clear");
-	gpib_write(pps_fd, "voltage:protection:state on");
-	gpib_write(pps_fd, "voltage:protection:level 11V");
+	// gpib_write(pps_fd, "voltage:protection:clear");
+	// gpib_write(pps_fd, "voltage:protection:state on");
+	// gpib_write(pps_fd, "voltage:protection:level 11V");
+	gpib_write(pps_fd, "voltage:limit 11V");
 	gpib_write(pps_fd, "voltage 0.0");
 	gpib_write(pps_fd, "current 0.1");
 	gpib_write(pps_fd, "channel:output 1");
@@ -244,7 +248,10 @@ void *worker(void *arg)
 		"# 2: time, s\n"
 		"# 3: pps voltage, V\n"
 		"# 4: pps current, A\n"
-		"# 5: vm curren, A\n");
+		"# 5: vm current, A\n"
+		"# 6: laser voltage, V\n"
+		"# 7: laser current, A\n"
+	);
 	if(r < 0)
 	{
 		fprintf(stderr, "# E: Unable to print to file \"%s\" (%s)\n", filename_vac, strerror(r));
@@ -298,29 +305,29 @@ void *worker(void *arg)
 			break;
 		}
 
-		// fprintf(stderr, "vac_index = %d\n", vac_index);
-		// fprintf(stderr, "vac_time = %le\n", vac_time);
-
-		gpib_write(pps_fd, "measure:voltage?");
+		gpib_write(pps_fd, "measure:voltage:all?");
 		gpib_read(pps_fd, buf, 100);
-		// fprintf(stderr, "pps_voltage = %s\n", buf);
-		pps_voltage = atof(buf);
-		// fprintf(stderr, "pps_voltage = %.3le\n", pps_voltage);
+		sscanf(buf, "%lf, %lf", &laser_voltage, &pps_voltage);
+		// pps_voltage = atof(buf);
 
-		gpib_write(pps_fd, "measure:current?");
+		gpib_write(pps_fd, "measure:current:all?");
 		gpib_read(pps_fd, buf, 100);
-		// fprintf(stderr, "pps_current = %s\n", buf);
-		pps_current = atof(buf);
-		// fprintf(stderr, "pps_current = %.3le\n", pps_current);
+		sscanf(buf, "%lf, %lf", &laser_current, &pps_current);
+		// pps_current = atof(buf);
 
 		gpib_write(vm_fd, "read?");
 		gpib_read(vm_fd, buf, 100);
-		// fprintf(stderr, "vm_current = %s\n", buf);
 		vm_current = atof(buf);
-		// fprintf(stderr, "vm_current = %.8le\n", vm_current);
 
-//*
-		r = fprintf(vac_fp, "%d\t%le\t%.3le\t%.3le\t%.8le\n", vac_index, vac_time, pps_voltage, pps_current, vm_current);
+		r = fprintf(vac_fp, "%d\t%le\t%.3le\t%.3le\t%.8le\t%.3le\t%.3le\n",
+			vac_index,
+			vac_time,
+			pps_voltage,
+			pps_current,
+			vm_current,
+			laser_voltage,
+			laser_current
+		);
 		if(r < 0)
 		{
 			fprintf(stderr, "# E: Unable to print to file \"%s\" (%s)\n", filename_vac, strerror(r));
@@ -329,11 +336,15 @@ void *worker(void *arg)
 		}
 
 		r = fprintf(gp,
-			"set title \"i = %d, t = %lf s\"\n"
-			"plot \"%s\" u 3:5 w l lw 1 notitle\n",
+			"set title \"i = %d, t = %.3lf s, Ul = %.3lf V, Il = %.3lf A\"\n"
+			"plot \"%s\" u 3:5 w l lw 1 title \"U = %.3lf V, I = %.3le A\"\n",
 			vac_index,
 			vac_time,
-			filename_vac
+			laser_voltage,
+			laser_current,
+			filename_vac,
+			pps_voltage,
+			vm_current
 		);
 		if(r < 0)
 		{
@@ -341,12 +352,13 @@ void *worker(void *arg)
 			set_run(0);
 			break;
 		}
-//*/
+
 		vac_index++;
 	}
 
 	gpib_write(pps_fd, "output 0");
 	gpib_write(pps_fd, "voltage 0");
+	gpib_write(pps_fd, "system:beeper");
 
 	worker_gp_settings:
 
