@@ -10,6 +10,9 @@
 #include <sys/types.h>
 #include <time.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <gpib/ib.h>
 
@@ -35,9 +38,13 @@ void *worker(void *);
 int get_run();
 void set_run(int run_new);
 double get_time();
+
 int gpib_write(int fd, const char *str);
 int gpib_read(int fd, char *buf, long len);
 void gpib_print_error(int fd);
+
+int usbtmc_write(int dev, const char *cmd);
+int usbtmc_read(int dev, char *buf, int buf_length);
 
 
 // === global variables
@@ -165,6 +172,7 @@ void *worker(void *arg)
 
 	int r;
 
+	int osc_fd;
 	int pps_fd;
 	int vm_fd;
 
@@ -183,6 +191,14 @@ void *worker(void *arg)
 	char   buf[100];
 
 	// === first we are connecting to instruments
+	r = open(HANTEK_TMC, O_RDWR);
+	if(r == -1)
+	{
+		fprintf(stderr, "# E: Unable to open hantek (%s)\n", strerror(errno));
+		goto worker_open_hantek;
+	}
+	osc_fd = r;
+
 	r = ibfind(PPS_GPIB_NAME);
 	if(r == -1)
 	{
@@ -204,23 +220,17 @@ void *worker(void *arg)
 	// === init pps
 	gpib_write(pps_fd, "output 0");
 	gpib_write(pps_fd, "instrument:nselect 1");
-	// gpib_write(pps_fd, "voltage:protection:clear");
-	// gpib_write(pps_fd, "voltage:protection:state on");
-	// gpib_write(pps_fd, "voltage:protection:level 5.5V");
-	gpib_write(pps_fd, "voltage:limit 5.5V");
-	gpib_write(pps_fd, "voltage 5.0");
-	gpib_write(pps_fd, "current 0.5");
-	gpib_write(pps_fd, "channel:output 1");
-	gpib_write(pps_fd, "instrument:nselect 2");
-	// gpib_write(pps_fd, "voltage:protection:clear");
-	// gpib_write(pps_fd, "voltage:protection:state on");
-	// gpib_write(pps_fd, "voltage:protection:level 11V");
 	gpib_write(pps_fd, "voltage:limit 11V");
 	gpib_write(pps_fd, "voltage 0.0");
 	gpib_write(pps_fd, "current 0.1");
 	gpib_write(pps_fd, "channel:output 1");
+	gpib_write(pps_fd, "instrument:nselect 2");
+	gpib_write(pps_fd, "voltage:limit 5.5V");
+	gpib_write(pps_fd, "voltage 5.0");
+	gpib_write(pps_fd, "current 0.15");
+	gpib_write(pps_fd, "channel:output 1");
+	gpib_write(pps_fd, "instrument:nselect 1");
 	// gpib_print_error(pps_fd);
-
 
 	// === init vm
 	gpib_write(vm_fd, "function \"current:dc\"");
@@ -233,6 +243,12 @@ void *worker(void *arg)
 	gpib_write(vm_fd, "sample:count 1");
 	// gpib_print_error(vm_fd);
 
+	// === init osc
+	usbtmc_write(osc_fd, "dds:switch 0");
+	usbtmc_write(osc_fd, "dds:type dc");
+	usbtmc_write(osc_fd, "dds:offset 3.5");
+	usbtmc_write(osc_fd, "dds:switch 1");
+
 	// === create vac file
 	vac_fp = fopen(filename_vac, "w+");
 	if(vac_fp == NULL)
@@ -244,6 +260,7 @@ void *worker(void *arg)
 
 	// === write vac header
 	r = fprintf(vac_fp,
+		"# Classical VAC experiment with laser on\n"
 		"# 1: index\n"
 		"# 2: time, s\n"
 		"# 3: pps voltage, V\n"
@@ -307,12 +324,12 @@ void *worker(void *arg)
 
 		gpib_write(pps_fd, "measure:voltage:all?");
 		gpib_read(pps_fd, buf, 100);
-		sscanf(buf, "%lf, %lf", &laser_voltage, &pps_voltage);
+		sscanf(buf, "%lf, %lf", &pps_voltage, &laser_voltage);
 		// pps_voltage = atof(buf);
 
 		gpib_write(pps_fd, "measure:current:all?");
 		gpib_read(pps_fd, buf, 100);
-		sscanf(buf, "%lf, %lf", &laser_current, &pps_current);
+		sscanf(buf, "%lf, %lf", &pps_current, &laser_current);
 		// pps_current = atof(buf);
 
 		gpib_write(vm_fd, "read?");
@@ -358,6 +375,10 @@ void *worker(void *arg)
 
 	gpib_write(pps_fd, "output 0");
 	gpib_write(pps_fd, "voltage 0");
+
+	usbtmc_write(osc_fd, "dds:switch 0");
+	usbtmc_write(osc_fd, "dds:offset 0");
+
 	gpib_write(pps_fd, "system:beeper");
 
 	worker_gp_settings:
@@ -390,6 +411,13 @@ void *worker(void *arg)
 	sleep(1);
 	ibloc(pps_fd);
 	worker_pps_ibfind:
+
+	r = close(osc_fd);
+	if(r == -1)
+	{
+		fprintf(stderr, "# E: Unable to close hantek (%s)\n", strerror(errno));
+	}
+	worker_open_hantek:
 
 	return NULL;
 }
@@ -478,4 +506,30 @@ void gpib_print_error(int fd)
 	gpib_read(fd, buf, 100);
 	fprintf(stderr, "[debug] error = %s\n", buf);
 #endif
+}
+
+int usbtmc_write(int dev, const char *cmd)
+{
+	int r;
+
+	r = write(dev, cmd, strlen(cmd));
+	if (r == -1)
+	{
+		fprintf(stderr, "# E: unable to write to hantek (%s)\n", strerror(errno));
+	}
+
+	return r;
+}
+
+int usbtmc_read(int dev, char *buf, int buf_length)
+{
+	int r;
+
+	r = read(dev, buf, buf_length);
+	if (r == -1)
+	{
+		fprintf(stderr, "# E: unable to read from hantek (%s)\n", strerror(errno));
+	}
+
+	return r;
 }
