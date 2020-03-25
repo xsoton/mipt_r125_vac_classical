@@ -17,9 +17,11 @@
 #include <gpib/ib.h>
 
 // === config
-#define HANTEK_TMC "/dev/usbtmc0"
-#define PPS_GPIB_NAME "AKIP-1142/3G"
-#define VM_GPIB_NAME "AKIP-V7-78/1"
+#define HANTEK_TMC "/dev/usbtmc3"
+#define PPS_TMC "/dev/usbtmc2"
+#define VM_TMC "/dev/usbtmc1"
+//#define PPS_GPIB_NAME "AKIP-1142/3G"
+//#define VM_GPIB_NAME "AKIP-V7-78/1"
 
 // === time
 #define STEP_DELAY 1.0e6 // us
@@ -45,6 +47,7 @@ void gpib_print_error(int fd);
 
 int usbtmc_write(int dev, const char *cmd);
 int usbtmc_read(int dev, char *buf, int buf_length);
+void usbtmc_print_error(int fd);
 
 
 // === global variables
@@ -199,7 +202,7 @@ void *worker(void *arg)
 	}
 	osc_fd = r;
 
-	r = ibfind(PPS_GPIB_NAME);
+	r = open(PS_TMC, O_RDWR);
 	if(r == -1)
 	{
 		fprintf(stderr, "# E: Unable to open power supply (%d)\n", r);
@@ -207,7 +210,7 @@ void *worker(void *arg)
 	}
 	pps_fd = r;
 
-	r = ibfind(VM_GPIB_NAME);
+	r = open(VM_TMC, O_RDWR);
 	if(r == -1)
 	{
 		fprintf(stderr, "# E: Unable to open voltmeter (%d)\n", r);
@@ -218,30 +221,30 @@ void *worker(void *arg)
 #define DEBUG
 
 	// === init pps
-	gpib_write(pps_fd, "output 0");
-	gpib_write(pps_fd, "instrument:nselect 1");
-	gpib_write(pps_fd, "voltage:limit 11V");
-	gpib_write(pps_fd, "voltage 0.0");
-	gpib_write(pps_fd, "current 0.1");
-	gpib_write(pps_fd, "channel:output 1");
-	gpib_write(pps_fd, "instrument:nselect 2");
-	gpib_write(pps_fd, "voltage:limit 5.5V");
-	gpib_write(pps_fd, "voltage 5.0");
-	gpib_write(pps_fd, "current 0.15");
-	gpib_write(pps_fd, "channel:output 1");
-	gpib_write(pps_fd, "instrument:nselect 1");
-	// gpib_print_error(pps_fd);
+	usbtmc_write(pps_fd, "output 0");
+	usbtmc_write(pps_fd, "instrument:nselect 1");
+	usbtmc_write(pps_fd, "voltage:limit 11V");
+	usbtmc_write(pps_fd, "voltage 0.0");
+	usbtmc_write(pps_fd, "current 0.1");
+	usbtmc_write(pps_fd, "channel:output 1");
+	usbtmc_write(pps_fd, "instrument:nselect 2");
+	usbtmc_write(pps_fd, "voltage:limit 5.5V");
+	usbtmc_write(pps_fd, "voltage 5.0");
+	usbtmc_write(pps_fd, "current 0.15");
+	usbtmc_write(pps_fd, "channel:output 1");
+	usbtmc_write(pps_fd, "instrument:nselect 1");
+	// usbtmc_print_error(pps_fd);
 
 	// === init vm
-	gpib_write(vm_fd, "function \"current:dc\"");
-	gpib_write(vm_fd, "current:dc:range:auto on");
-	gpib_write(vm_fd, "current:dc:nplcycles 10");
-	gpib_write(vm_fd, "trigger:source immediate");
-	gpib_write(vm_fd, "trigger:delay:auto off");
-	gpib_write(vm_fd, "trigger:delay 0");
-	gpib_write(vm_fd, "trigger:count 1");
-	gpib_write(vm_fd, "sample:count 1");
-	// gpib_print_error(vm_fd);
+	usbtmc_write(vm_fd, "function \"current:dc\"");
+	usbtmc_write(vm_fd, "current:dc:range:auto on");
+	usbtmc_write(vm_fd, "current:dc:nplcycles 10");
+	usbtmc_write(vm_fd, "trigger:source immediate");
+	usbtmc_write(vm_fd, "trigger:delay:auto off");
+	usbtmc_write(vm_fd, "trigger:delay 0");
+	usbtmc_write(vm_fd, "trigger:count 1");
+	usbtmc_write(vm_fd, "sample:count 1");
+	// usbtmc_print_error(vm_fd);
 
 	// === init osc
 	usbtmc_write(osc_fd, "dds:switch 0");
@@ -310,7 +313,7 @@ void *worker(void *arg)
 		}
 
 		snprintf(buf, 100, "voltage %.3lf", voltage);
-		gpib_write(pps_fd, buf);
+		usbtmc_write(pps_fd, buf);
 
 		usleep(STEP_DELAY);
 
@@ -322,18 +325,18 @@ void *worker(void *arg)
 			break;
 		}
 
-		gpib_write(pps_fd, "measure:voltage:all?");
-		gpib_read(pps_fd, buf, 100);
+		usbtmc_write(pps_fd, "measure:voltage:all?");
+		usbtmc_read(pps_fd, buf, 100);
 		sscanf(buf, "%lf, %lf", &pps_voltage, &laser_voltage);
 		// pps_voltage = atof(buf);
 
-		gpib_write(pps_fd, "measure:current:all?");
-		gpib_read(pps_fd, buf, 100);
+		usbtmc_write(pps_fd, "measure:current:all?");
+		usbtmc_read(pps_fd, buf, 100);
 		sscanf(buf, "%lf, %lf", &pps_current, &laser_current);
 		// pps_current = atof(buf);
 
-		gpib_write(vm_fd, "read?");
-		gpib_read(vm_fd, buf, 100);
+		usbtmc_write(vm_fd, "read?");
+		usbtmc_read(vm_fd, buf, 100);
 		vm_current = atof(buf);
 
 		r = fprintf(vac_fp, "%d\t%le\t%.3le\t%.3le\t%.8le\t%.3le\t%.3le\n",
@@ -373,13 +376,13 @@ void *worker(void *arg)
 		vac_index++;
 	}
 
-	gpib_write(pps_fd, "output 0");
-	gpib_write(pps_fd, "voltage 0");
+	usbtmc_write(pps_fd, "output 0");
+	usbtmc_write(pps_fd, "voltage 0");
 
 	usbtmc_write(osc_fd, "dds:switch 0");
 	usbtmc_write(osc_fd, "dds:offset 0");
 
-	gpib_write(pps_fd, "system:beeper");
+	usbtmc_write(pps_fd, "system:beeper");
 
 	worker_gp_settings:
 
@@ -401,13 +404,13 @@ void *worker(void *arg)
 	worker_vac_fopen:
 
 	ibclr(vm_fd);
-	gpib_write(vm_fd, "*rst");
+	usbtmc_write(vm_fd, "*rst");
 	sleep(1);
 	ibloc(vm_fd);
 	worker_vm_ibfind:
 
 	ibclr(pps_fd);
-	gpib_write(pps_fd, "*rst");
+	usbtmc_write(pps_fd, "*rst");
 	sleep(1);
 	ibloc(pps_fd);
 	worker_pps_ibfind:
@@ -532,4 +535,14 @@ int usbtmc_read(int dev, char *buf, int buf_length)
 	}
 
 	return r;
+}
+
+void usbtmc_print_error(int fd)
+{
+#ifdef DEBUG
+	char buf[100] = {0};
+	usbtmc_write(fd, "system:error?");
+	usbtmc_read(fd, buf, 100);
+	fprintf(stderr, "[debug] error = %s\n", buf);
+#endif
 }
