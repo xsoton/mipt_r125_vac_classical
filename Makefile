@@ -47,7 +47,8 @@ CFLAGS_EXTRA = -std=gnu99
 
 CFLAGS += $(DEFINES) $(MCUFLAGS) $(DEBUG_OPTIMIZE_FLAGS) $(CFLAGS_EXTRA) $(INCLUDES)
 
-LDFLAGS = $(MCUFLAGS) -lpthread -lgpib
+# LDFLAGS = $(MCUFLAGS) -lpthread -lgpib
+LDFLAGS = $(MCUFLAGS) -lpthread
 
 .PHONY: dirs all clean
 

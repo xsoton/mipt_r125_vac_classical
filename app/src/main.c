@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include <gpib/ib.h>
+//#include <gpib/ib.h>
 
 // === config
 #define HANTEK_TMC "/dev/usbtmc3"
@@ -41,9 +41,9 @@ int get_run();
 void set_run(int run_new);
 double get_time();
 
-int gpib_write(int fd, const char *str);
-int gpib_read(int fd, char *buf, long len);
-void gpib_print_error(int fd);
+//int gpib_write(int fd, const char *str);
+//int gpib_read(int fd, char *buf, long len);
+//void gpib_print_error(int fd);
 
 int usbtmc_write(int dev, const char *cmd);
 int usbtmc_read(int dev, char *buf, int buf_length);
@@ -202,11 +202,11 @@ void *worker(void *arg)
 	}
 	osc_fd = r;
 
-	r = open(PS_TMC, O_RDWR);
+	r = open(PPS_TMC, O_RDWR);
 	if(r == -1)
 	{
 		fprintf(stderr, "# E: Unable to open power supply (%d)\n", r);
-		goto worker_pps_ibfind;
+		goto worker_open_pps;
 	}
 	pps_fd = r;
 
@@ -214,7 +214,7 @@ void *worker(void *arg)
 	if(r == -1)
 	{
 		fprintf(stderr, "# E: Unable to open voltmeter (%d)\n", r);
-		goto worker_vm_ibfind;
+		goto worker_open_vm;
 	}
 	vm_fd = r;
 
@@ -403,17 +403,27 @@ void *worker(void *arg)
 	}
 	worker_vac_fopen:
 
-	ibclr(vm_fd);
-	usbtmc_write(vm_fd, "*rst");
-	sleep(1);
-	ibloc(vm_fd);
-	worker_vm_ibfind:
+	// ibclr(vm_fd);
+	// usbtmc_write(vm_fd, "*rst");
+	// sleep(1);
+	// ibloc(vm_fd);
+	r = close(vm_fd);
+	if(r == -1)
+	{
+		fprintf(stderr, "# E: Unable to close voltmeter (%s)\n", strerror(errno));
+	}
+	worker_open_vm:
 
-	ibclr(pps_fd);
-	usbtmc_write(pps_fd, "*rst");
-	sleep(1);
-	ibloc(pps_fd);
-	worker_pps_ibfind:
+	// ibclr(pps_fd);
+	// usbtmc_write(pps_fd, "*rst");
+	// sleep(1);
+	// ibloc(pps_fd);
+	r = close(pps_fd);
+	if(r == -1)
+	{
+		fprintf(stderr, "# E: Unable to close power supply (%s)\n", strerror(errno));
+	}
+	worker_open_pps:
 
 	r = close(osc_fd);
 	if(r == -1)
@@ -483,33 +493,33 @@ double get_time()
 }
 
 
-int gpib_write(int fd, const char *str)
-{
-	return ibwrt(fd, str, strlen(str));
-}
+//int gpib_write(int fd, const char *str)
+//{
+//	return ibwrt(fd, str, strlen(str));
+//}
 
-int gpib_read(int fd, char *buf, long len)
-{
-	int r;
+// int gpib_read(int fd, char *buf, long len)
+// {
+// 	int r;
 
-	r = ibrd(fd, buf, len);
-	if (ibcnt < len)
-	{
-		buf[ibcnt] = 0;
-	}
+// 	r = ibrd(fd, buf, len);
+// 	if (ibcnt < len)
+// 	{
+// 		buf[ibcnt] = 0;
+// 	}
 
-	return r;
-}
+// 	return r;
+// }
 
-void gpib_print_error(int fd)
-{
-#ifdef DEBUG
-	char buf[100] = {0};
-	gpib_write(fd, "system:error?");
-	gpib_read(fd, buf, 100);
-	fprintf(stderr, "[debug] error = %s\n", buf);
-#endif
-}
+// void gpib_print_error(int fd)
+// {
+// #ifdef DEBUG
+// 	char buf[100] = {0};
+// 	gpib_write(fd, "system:error?");
+// 	gpib_read(fd, buf, 100);
+// 	fprintf(stderr, "[debug] error = %s\n", buf);
+// #endif
+// }
 
 int usbtmc_write(int dev, const char *cmd)
 {
