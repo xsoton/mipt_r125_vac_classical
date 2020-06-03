@@ -18,7 +18,7 @@ OBJS = $(SOURCES_S:.s=.o) $(SOURCES_C:.c=.o)
 
 INCLUDES = -Iapp/inc
 
-DEFINES =
+DEFINES = -DDEV_AKIP_TMC
 #-DQJ -DLOMO -DAPPA
 
 # Compiler/Assembler/Linker/etc
@@ -37,7 +37,7 @@ RM = rm -f
 
 # Compiler options
 
-MCUFLAGS =
+CPUFLAGS =
 
 DEBUG_OPTIMIZE_FLAGS = -O0 -ggdb -gdwarf-2
 # DEBUG_OPTIMIZE_FLAGS = -O3
@@ -45,9 +45,10 @@ DEBUG_OPTIMIZE_FLAGS = -O0 -ggdb -gdwarf-2
 CFLAGS = -Wall -Wextra --pedantic
 CFLAGS_EXTRA = -std=gnu99
 
-CFLAGS += $(DEFINES) $(MCUFLAGS) $(DEBUG_OPTIMIZE_FLAGS) $(CFLAGS_EXTRA) $(INCLUDES)
+CFLAGS += $(DEFINES) $(CPUFLAGS) $(DEBUG_OPTIMIZE_FLAGS) $(CFLAGS_EXTRA) $(INCLUDES)
 
-LDFLAGS = $(MCUFLAGS) -lpthread -lgpib
+LDFLAGS = $(CPUFLAGS) -lpthread -lgpib
+# LDFLAGS = $(CPUFLAGS) -lpthread
 
 .PHONY: dirs all clean
 
