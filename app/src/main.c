@@ -370,29 +370,11 @@ void *worker(void *arg)
 	}
 	worker_vac_fopen:
 
-	usbtmc_write(vm_fd, "*rst");
 	dev_close(vm_fd);
 	worker_vm_open:
 
-	// ibclr(vm_fd);
-	// gpib_write(vm_fd, "*rst");
-	// sleep(1);
-	// ibloc(vm_fd);
-	// worker_vm_ibfind:
-
-	usbtmc_write(pps_fd, "*rst");
-	r = close(pps_fd);
-	if(r == -1)
-	{
-		fprintf(stderr, "# E: Unable to close pps (%s)\n", strerror(errno));
-	}
+	dev_close(pps_fd);
 	worker_pps_open:
-
-	// ibclr(pps_fd);
-	// gpib_write(pps_fd, "*rst");
-	// sleep(1);
-	// ibloc(pps_fd);
-	// worker_pps_ibfind:
 
 	r = close(osc_fd);
 	if(r == -1)
